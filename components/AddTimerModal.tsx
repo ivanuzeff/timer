@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-    import { X, Clock, Plus, Bell, Volume2, Play } from 'lucide-react';
+    import { X, Clock, Plus, Bell, Volume2, Play, Repeat } from 'lucide-react';
     import { Button } from './Button';
     import { SoundType } from '../types';
     import { playTimerSound, requestNotificationPermission } from '../utils';
@@ -7,7 +7,7 @@ import React, { useState } from 'react';
     interface AddTimerModalProps {
       isOpen: boolean;
       onClose: () => void;
-      onAdd: (duration: number, label: string, sound: SoundType, useNotification: boolean) => void;
+      onAdd: (duration: number, label: string, sound: SoundType, useNotification: boolean, isLooping: boolean) => void;
     }
     
     export const AddTimerModal: React.FC<AddTimerModalProps> = ({ isOpen, onClose, onAdd }) => {
@@ -17,6 +17,7 @@ import React, { useState } from 'react';
       const [seconds, setSeconds] = useState(0);
       const [sound, setSound] = useState<SoundType>('beep');
       const [useNotification, setUseNotification] = useState(false);
+      const [isLooping, setIsLooping] = useState(false);
     
       if (!isOpen) return null;
     
@@ -24,7 +25,7 @@ import React, { useState } from 'react';
         e.preventDefault();
         const totalSeconds = (hours * 3600) + (minutes * 60) + seconds;
         if (totalSeconds > 0) {
-          onAdd(totalSeconds, label, sound, useNotification);
+          onAdd(totalSeconds, label, sound, useNotification, isLooping);
           // Reset form
           setLabel('');
           setHours(0);
@@ -32,6 +33,7 @@ import React, { useState } from 'react';
           setSeconds(0);
           setSound('beep');
           setUseNotification(false);
+          setIsLooping(false);
           onClose();
         }
       };
@@ -49,12 +51,20 @@ import React, { useState } from 'react';
           if (granted) {
             setUseNotification(true);
           } else {
-            // Optionally alert user that permission was denied
             setUseNotification(false);
             alert("Пожалуйста, разрешите уведомления в настройках браузера.");
           }
         } else {
           setUseNotification(false);
+        }
+      };
+
+      const testNotification = () => {
+        if (useNotification) {
+            new Notification("Тестовое уведомление", {
+                body: "Если вы видите это, значит уведомления работают!",
+                icon: '/favicon.ico'
+            });
         }
       };
     
@@ -68,7 +78,7 @@ import React, { useState } from 'react';
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200"
           onClick={handleBackdropClick}
         >
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 relative">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md shadow-2xl p-6 relative max-h-[90vh] overflow-y-auto">
             <button 
               onClick={onClose}
               className="absolute top-4 right-4 text-slate-400 hover:text-white transition-colors"
@@ -131,12 +141,12 @@ import React, { useState } from 'react';
                   type="text"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  placeholder="Например: Яйца всмятку"
+                  placeholder="Например: Интервал"
                   className="w-full bg-slate-950 border border-slate-800 rounded-lg px-4 py-2 text-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all placeholder:text-slate-600"
                 />
               </div>
     
-              {/* Sound & Notification */}
+              {/* Settings Group */}
               <div className="grid grid-cols-1 gap-4 bg-slate-950/50 p-4 rounded-lg border border-slate-800">
                 
                 {/* Sound Selector */}
@@ -165,20 +175,46 @@ import React, { useState } from 'react';
                   </div>
                 </div>
     
-                {/* Notification Checkbox */}
-                <div className="flex items-center gap-3 mt-2">
-                    <div className="relative flex items-center">
-                        <input
-                            type="checkbox"
-                            id="notify"
-                            checked={useNotification}
-                            onChange={handleNotificationChange}
-                            className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
-                        />
+                {/* Options */}
+                <div className="space-y-3 mt-2">
+                    {/* Notification Checkbox */}
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                             <div className="relative flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="notify"
+                                    checked={useNotification}
+                                    onChange={handleNotificationChange}
+                                    className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                                />
+                            </div>
+                            <label htmlFor="notify" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-2">
+                                <Bell size={16} /> Уведомления
+                            </label>
+                        </div>
+                        {useNotification && (
+                            <button type="button" onClick={testNotification} className="text-xs text-indigo-400 hover:text-indigo-300 underline">
+                                Тест
+                            </button>
+                        )}
                     </div>
-                    <label htmlFor="notify" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-2">
-                        <Bell size={16} /> Отправлять уведомление в браузер
-                    </label>
+
+                    {/* Loop Checkbox */}
+                    <div className="flex items-center gap-3">
+                         <div className="relative flex items-center">
+                            <input
+                                type="checkbox"
+                                id="loop"
+                                checked={isLooping}
+                                onChange={(e) => setIsLooping(e.target.checked)}
+                                className="w-5 h-5 rounded border-slate-700 bg-slate-900 text-indigo-600 focus:ring-indigo-500 focus:ring-offset-slate-900"
+                            />
+                        </div>
+                        <label htmlFor="loop" className="text-sm font-medium text-slate-300 cursor-pointer flex items-center gap-2">
+                            <Repeat size={16} /> Автоповтор (цикл)
+                        </label>
+                    </div>
                 </div>
               </div>
     

@@ -44,22 +44,38 @@ export default function App() {
           const newRemaining = Math.max(0, timer.remainingTime - deltaSeconds);
           const isFinished = newRemaining <= 0;
 
-          if (isFinished && !timer.isCompleted) {
-            // Play Sound
-            playTimerSound(timer.sound);
+          if (isFinished) {
+            // Play Sound with specific volume
+            playTimerSound(timer.sound, timer.volume ?? 0.5);
             
             // Send Notification
             if (timer.useNotification) {
-                sendBrowserNotification('Таймер завершен!', `${timer.label || 'Таймер'} завершил отсчет.`);
+                const title = timer.isLooping ? 'Цикл завершен!' : 'Таймер завершен!';
+                const body = timer.isLooping 
+                    ? `${timer.label || 'Таймер'} начинает новый цикл.` 
+                    : `${timer.label || 'Таймер'} завершил отсчет.`;
+                sendBrowserNotification(title, body);
             }
 
             hasChanges = true;
-            return {
-              ...timer,
-              remainingTime: 0,
-              isRunning: false,
-              isCompleted: true
-            };
+
+            if (timer.isLooping) {
+                // Auto-restart logic
+                return {
+                    ...timer,
+                    remainingTime: timer.totalDuration,
+                    isRunning: true, // Keep running
+                    isCompleted: false
+                };
+            } else {
+                // Standard stop logic
+                return {
+                  ...timer,
+                  remainingTime: 0,
+                  isRunning: false,
+                  isCompleted: true
+                };
+            }
           }
 
           if (newRemaining !== timer.remainingTime) {
@@ -77,7 +93,7 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  const addTimer = (duration: number, label: string, sound: SoundType, useNotification: boolean) => {
+  const addTimer = (duration: number, label: string, sound: SoundType, useNotification: boolean, isLooping: boolean) => {
     const newTimer: Timer = {
       id: crypto.randomUUID(),
       label: label || `Таймер #${timers.length + 1}`,
@@ -85,9 +101,11 @@ export default function App() {
       remainingTime: duration,
       isRunning: false, // Start manually
       isCompleted: false,
+      isLooping,
       createdAt: Date.now(),
       sound,
-      useNotification
+      useNotification,
+      volume: 0.5 // Default volume
     };
     setTimers(prev => [...prev, newTimer]);
   };
@@ -117,6 +135,13 @@ export default function App() {
 
   const deleteTimer = useCallback((id: string) => {
     setTimers(prev => prev.filter(t => t.id !== id));
+  }, []);
+
+  const updateVolume = useCallback((id: string, volume: number) => {
+    setTimers(prev => prev.map(t => {
+      if (t.id !== id) return t;
+      return { ...t, volume };
+    }));
   }, []);
 
   // Sort timers: Active first, then paused, then completed
@@ -190,6 +215,7 @@ export default function App() {
                 onToggle={toggleTimer}
                 onReset={resetTimer}
                 onDelete={deleteTimer}
+                onVolumeChange={updateVolume}
               />
             ))}
           </div>

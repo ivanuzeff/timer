@@ -7,9 +7,11 @@ export interface Timer {
   remainingTime: number; // in seconds
   isRunning: boolean;
   isCompleted: boolean;
+  isLooping: boolean; // Auto-restart when finished
   createdAt: number;
   sound: SoundType;
   useNotification: boolean;
+  volume: number; // 0.0 to 1.0
 }
 
 export type TimerStatus = 'idle' | 'running' | 'paused' | 'completed';
