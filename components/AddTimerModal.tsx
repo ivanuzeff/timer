@@ -2,7 +2,7 @@ import React, { useState } from 'react';
     import { X, Clock, Plus, Bell, Volume2, Play, Repeat } from 'lucide-react';
     import { Button } from './Button';
     import { SoundType } from '../types';
-    import { playTimerSound, requestNotificationPermission } from '../utils';
+    import { playTimerSound, requestNotificationPermission, unlockAudioContext } from '../utils';
     
     interface AddTimerModalProps {
       isOpen: boolean;
@@ -60,6 +60,7 @@ import React, { useState } from 'react';
       };
 
       const testNotification = () => {
+        unlockAudioContext();
         if (useNotification) {
             new Notification("Тестовое уведомление", {
                 body: "Если вы видите это, значит уведомления работают!",
@@ -70,6 +71,7 @@ import React, { useState } from 'react';
     
       const previewSound = (e: React.MouseEvent) => {
         e.preventDefault();
+        unlockAudioContext(); // Explicit unlock on user interaction
         playTimerSound(sound);
       };
     

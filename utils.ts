@@ -17,12 +17,26 @@ let audioContext: AudioContext | null = null;
 
 const getAudioContext = () => {
   if (!audioContext) {
-    audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-  }
-  if (audioContext.state === 'suspended') {
-    audioContext.resume();
+    // Standard and Webkit (iOS) AudioContext
+    const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+    audioContext = new AudioContextClass();
   }
   return audioContext;
+};
+
+// Fix for iOS: Function to unlock audio context on first user interaction
+export const unlockAudioContext = () => {
+  const ctx = getAudioContext();
+  if (ctx.state === 'suspended') {
+    ctx.resume();
+  }
+  
+  // Play a tiny silent buffer to "warm up" the iOS audio engine
+  const buffer = ctx.createBuffer(1, 1, 22050);
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.connect(ctx.destination);
+  source.start(0);
 };
 
 // Sound Generators
@@ -117,6 +131,11 @@ export const playTimerSound = (type: SoundType, volume: number = 0.5) => {
   const ctx = getAudioContext();
   const now = ctx.currentTime;
 
+  // Ensure context is running (fixes some mobile issues if unlocked but suspended)
+  if (ctx.state === 'suspended') {
+    ctx.resume().catch(() => {});
+  }
+
   switch (type) {
     case 'alarm':
       // Repeat the alarm pattern 3 times
@@ -169,3 +188,23 @@ export const sendBrowserNotification = (title: string, body: string) => {
     });
   }
 };
+
+// Web Worker Script for Background Timer
+// We use a Blob to create an inline worker without needing an external file
+export const timerWorkerScript = `
+  let intervalId;
+  self.onmessage = function(e) {
+    if (e.data === 'start') {
+      if (!intervalId) {
+        intervalId = setInterval(() => {
+          self.postMessage('tick');
+        }, 100);
+      }
+    } else if (e.data === 'stop') {
+      if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    }
+  };
+`;

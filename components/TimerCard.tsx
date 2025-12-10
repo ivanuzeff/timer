@@ -89,7 +89,7 @@ export const TimerCard: React.FC<TimerCardProps> = ({
                 type="range" 
                 min="0" 
                 max="1" 
-                step="0.01" 
+                step="0.1" 
                 value={currentVolume}
                 onChange={(e) => onVolumeChange(timer.id, parseFloat(e.target.value))}
                 className="w-full h-1 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-indigo-500 hover:accent-indigo-400"

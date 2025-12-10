@@ -4,10 +4,7 @@ import { Timer, SoundType } from './types';
 import { TimerCard } from './components/TimerCard';
 import { AddTimerModal } from './components/AddTimerModal';
 import { Button } from './components/Button';
-import { playTimerSound, sendBrowserNotification } from './utils';
-
-// Constants
-const TICK_RATE_MS = 100;
+import { playTimerSound, sendBrowserNotification, timerWorkerScript, unlockAudioContext } from './utils';
 
 export default function App() {
   const [timers, setTimers] = useState<Timer[]>(() => {
@@ -21,23 +18,57 @@ export default function App() {
   });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // Refs for timing logic
   const lastTickRef = useRef<number>(Date.now());
+  const workerRef = useRef<Worker | null>(null);
+
+  // Initialize Audio Unlock on first interaction (fixes iOS sound issues)
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      unlockAudioContext();
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+
+    window.addEventListener('click', handleFirstInteraction);
+    window.addEventListener('touchstart', handleFirstInteraction);
+    window.addEventListener('keydown', handleFirstInteraction);
+
+    return () => {
+      window.removeEventListener('click', handleFirstInteraction);
+      window.removeEventListener('touchstart', handleFirstInteraction);
+      window.removeEventListener('keydown', handleFirstInteraction);
+    };
+  }, []);
 
   // Save to local storage whenever timers change
   useEffect(() => {
     localStorage.setItem('timers', JSON.stringify(timers));
   }, [timers]);
 
-  // Main timer loop
+  // Main timer loop using Web Worker (fixes background tab throttling)
   useEffect(() => {
-    const interval = setInterval(() => {
+    // Create worker from blob
+    const blob = new Blob([timerWorkerScript], { type: 'application/javascript' });
+    const worker = new Worker(URL.createObjectURL(blob));
+    workerRef.current = worker;
+
+    worker.onmessage = () => {
       const now = Date.now();
       const deltaSeconds = (now - lastTickRef.current) / 1000;
       lastTickRef.current = now;
 
       setTimers(prevTimers => {
         let hasChanges = false;
-        
+        // Check if any timer needs to run
+        const anyRunning = prevTimers.some(t => t.isRunning);
+        if (!anyRunning && deltaSeconds > 1) { 
+           // Optimization: if nothing runs, don't update state constantly
+           return prevTimers; 
+        }
+
         const nextTimers = prevTimers.map(timer => {
           if (!timer.isRunning || timer.isCompleted) return timer;
 
@@ -88,12 +119,20 @@ export default function App() {
 
         return hasChanges ? nextTimers : prevTimers;
       });
-    }, TICK_RATE_MS);
+    };
 
-    return () => clearInterval(interval);
+    // Start the worker
+    worker.postMessage('start');
+    lastTickRef.current = Date.now();
+
+    return () => {
+      worker.postMessage('stop');
+      worker.terminate();
+    };
   }, []);
 
   const addTimer = (duration: number, label: string, sound: SoundType, useNotification: boolean, isLooping: boolean) => {
+    unlockAudioContext(); // Ensure audio is ready
     const newTimer: Timer = {
       id: crypto.randomUUID(),
       label: label || `Таймер #${timers.length + 1}`,
@@ -111,9 +150,10 @@ export default function App() {
   };
 
   const toggleTimer = useCallback((id: string) => {
+    unlockAudioContext(); // Ensure audio is ready on user interaction
     setTimers(prev => prev.map(t => {
       if (t.id !== id) return t;
-      // We also update lastTick when starting to avoid jumping
+      // Update lastTick when starting to avoid large jumps if logic was paused
       if (!t.isRunning) {
         lastTickRef.current = Date.now();
       }
@@ -138,6 +178,8 @@ export default function App() {
   }, []);
 
   const updateVolume = useCallback((id: string, volume: number) => {
+    // Playing a short blip here could be annoying, so we just unlock
+    unlockAudioContext(); 
     setTimers(prev => prev.map(t => {
       if (t.id !== id) return t;
       return { ...t, volume };
